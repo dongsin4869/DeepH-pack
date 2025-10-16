@@ -257,8 +257,8 @@ def siesta_parse(input_path, output_path):
         t += 1
 
     # Read Hamiltonian from .HSX file by using sisl instead of FortranFile
-    fdf = sisl.get_sile("{input_path}/input.fdf")
-    hsx = sisl.get_sile("{input_path/}{system_name}.HSX")
+    fdf = sisl.get_sile(f"{input_path}/input.fdf")
+    hsx = sisl.get_sile(f"{input_path}/{system_name}.HSX")
 
     geom = fdf.read_geometry()
     H = hsx.read_hamiltonian(parent=geom)
@@ -267,26 +267,23 @@ def siesta_parse(input_path, output_path):
     na = geom.na
     nou = geom.no
 
-    with h5py.File("{output_path}/hamiltonians.h5", "w") as f:
-        for ia in range(na):
-            for ja in range(na):
-                io_start = geom.a2o(ia)
-                io_end = geom.a2o(ia + 1) if ia + 1 < na else nou
-                jo_start = geom.a2o(ja)
-                jo_end = geom.a2o(ja + 1) if ja + 1 < na else nou
+    HR = H.tocsr(dim=0).toarray()
 
-                io_list = list(range(io_start, io_end))
-                jo_list = list(range(jo_start, jo_end))
+    with h5py.File(f"{output_path}/hamiltonians.h5", "w") as f:
+        for isc, R in enumerate(Rs):
+            HR_isc = HR[:, isc * nou : (isc + 1) * nou]
+            for ia in range(na):
+                for ja in range(na):
+                    io_start = geom.a2o(ia)
+                    io_end = geom.a2o(ia + 1) if ia + 1 < na else nou
+                    jo_start = geom.a2o(ja)
+                    jo_end = geom.a2o(ja + 1) if ja + 1 < na else nou
 
-                for isc, R in enumerate(Rs):
                     key = f"[{R[0]}, {R[1]}, {R[2]}, {ia + 1}, {ja + 1}]"
 
-                    block = np.zeros((len(io_list), len(jo_list)), dtype=np.float64)
-                    for i, io in enumerate(io_list):
-                        for j, jo in enumerate(jo_list):
-                            block[i, j] = H[io, jo, isc]
+                    HR_isc_ij = HR_isc[io_start:io_end, jo_start:jo_end]
 
-                    f[key] = block
+                    f[key] = HR_isc_ij
 
     # Read Useful info of HSX, We only need H and S from this file, but due to structure of fortran unformatted, extra information must be read
     # f = FortranFile('{}/{}.HSX'.format(input_path,system_name), 'r')
