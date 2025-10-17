@@ -1,13 +1,25 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: deeph
 Version: 0.2.2
 Summary: DeepH-pack is the official implementation of the Deep Hamiltonian (DeepH) method.
-Home-page: UNKNOWN
+Download-URL: https://github.com/mzjb/DeepH-pack
 Author: He Li
 License: MIT
-Download-URL: https://github.com/mzjb/DeepH-pack
-Platform: UNKNOWN
 Requires-Python: >=3.9
-
-UNKNOWN
-
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: torch>=1.9
+Requires-Dist: torch_geometric>=1.7.2
+Requires-Dist: e3nn<=0.4.4,>=0.3.5
+Requires-Dist: h5py
+Requires-Dist: pymatgen
+Requires-Dist: pathos
+Requires-Dist: psutil
+Requires-Dist: tqdm
+Requires-Dist: tensorboard
+Dynamic: author
+Dynamic: download-url
+Dynamic: license
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
