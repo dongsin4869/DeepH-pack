@@ -111,14 +111,24 @@ def siesta_parse(input_path, output_path):
     orbitals = atoms.orbitals
     Rs = H.sc_off
 
+    # hamiltonians.h5, density_matrixs.h5, overlap.h5
+    info = {
+        "nsites": num_atoms,
+        "isorthogonal": False,
+        "isspinful": nspin != 1,
+        "norbits": len(orb_indx),
+    }
+    with open("{}/info.json".format(output_path), "w") as info_f:
+        json.dump(info, info_f)
+
     H_block_sparse = {}
     S_block_sparse = {}
 
     # Hamiltonian pasring
-    for ispin in range(nspin):
+    if nspin == 1:
         cum = np.cumsum(np.concatenate(([0], orbitals)))
         for ia, noi in enumerate(orbitals):
-            tmpt = H.tocsr(dim=ispin)[cum[ia] : cum[ia + 1], :]
+            tmpt = H.tocsr(dim=0)[cum[ia] : cum[ia + 1], :]
             for i, R in enumerate(Rs):
                 H_sub = tmpt[:, i * nou : (i + 1) * nou]
                 for ja, noj in enumerate(orbitals):
@@ -134,25 +144,62 @@ def siesta_parse(input_path, output_path):
 
                     H_block_sparse[key].append(H_block.toarray())
 
-    # Overlap parsing
-    for ispin in range(nspin):
+    elif nspin == 8:
+        H_upup = H.tocsr(dim=0) + 1j * H.tocsr(dim=1)
+        H_updn = H.tocsr(dim=2) + 1j * H.tocsr(dim=3)
+        H_dnup = H.tocsr(dim=4) + 1j * H.tocsr(dim=5)
+        H_dndn = H.tocsr(dim=6) + 1j * H.tocsr(dim=7)
+
         cum = np.cumsum(np.concatenate(([0], orbitals)))
         for ia, noi in enumerate(orbitals):
-            tmpt = S.tocsr(dim=ispin)[cum[ia] : cum[ia + 1], :]
             for i, R in enumerate(Rs):
-                S_sub = tmpt[:, i * nou : (i + 1) * nou]
                 for ja, noj in enumerate(orbitals):
-                    S_block = S_sub[:, cum[ja] : cum[ja + 1]]
+                    Hij = np.zeros((noi * 2, noj * 2), dtype=np.complex128)
 
-                    if S_block.data.size == 0:
+                    Hij[:noi, :noj] = H_upup[
+                        cum[ia] : cum[ia + 1], cum[ja] : cum[ja + 1]
+                    ].toarray()
+                    Hij[:noi, noj:] = H_updn[
+                        cum[ia] : cum[ia + 1], cum[ja] : cum[ja + 1]
+                    ].toarray()
+                    Hij[noi:, :noj] = H_dnup[
+                        cum[ia] : cum[ia + 1], cum[ja] : cum[ja + 1]
+                    ].toarray()
+                    Hij[noi:, noj:] = H_dndn[
+                        cum[ia] : cum[ia + 1], cum[ja] : cum[ja + 1]
+                    ].toarray()
+
+                    if not np.any(Hij):
                         continue
 
                     key = f"[{int(R[0])}, {int(R[1])}, {int(R[2])}, {ia + 1}, {ja + 1}]"
 
-                    if key not in S_block_sparse:
-                        S_block_sparse[key] = []
+                    if key not in H_block_sparse:
+                        H_block_sparse[key] = []
 
-                    S_block_sparse[key].append(S_block.toarray())
+                    H_block_sparse[key].append(Hij)
+
+    else:
+        raise NotImplementedError("Only nspin=1 and nspin=8 are supported.")
+
+    # Overlap parsing
+    cum = np.cumsum(np.concatenate(([0], orbitals)))
+    for ia, noi in enumerate(orbitals):
+        tmpt = S.tocsr(dim=0)[cum[ia] : cum[ia + 1], :]
+        for i, R in enumerate(Rs):
+            S_sub = tmpt[:, i * nou : (i + 1) * nou]
+            for ja, noj in enumerate(orbitals):
+                S_block = S_sub[:, cum[ja] : cum[ja + 1]]
+
+                if S_block.data.size == 0:
+                    continue
+
+                key = f"[{int(R[0])}, {int(R[1])}, {int(R[2])}, {ia + 1}, {ja + 1}]"
+
+                if key not in S_block_sparse:
+                    S_block_sparse[key] = []
+
+                S_block_sparse[key].append(S_block.toarray())
 
     # Save Hamiltonian and overlap matrix to HDF5
     with h5py.File(f"{output_path}/hamiltonians.h5", "w") as f:
